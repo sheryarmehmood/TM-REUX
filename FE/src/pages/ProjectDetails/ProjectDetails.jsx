@@ -12,24 +12,26 @@ import {
 function ProjectDetails() {
     const { projectId } = useParams();
     const { data: projectResponse, isLoading: projectLoading } = useGetProjectQuery(projectId);
-    const { data: tasksResponse, isLoading: tasksLoading, isError, refetch } = useGetProjectTasksQuery({ projectId });
+    const [page, setPage] = useState(1);
+    const { data: tasksResponse, isLoading: tasksLoading, isError, refetch } = useGetProjectTasksQuery({ projectId, page, per_page: 10 });
     const [createTask, { isLoading: isCreating }] = useCreateTaskMutation();
-    const [updateTask] = useUpdateTaskMutation();
+    const [updateTask, { isLoading: isUpdating }] = useUpdateTaskMutation();
     const [deleteTask] = useDeleteTaskMutation();
-    const [title, setTitle] = useState("");
-    const [priority, setPriority] = useState("medium");
+    const [form, setForm] = useState({ title: "", priority: "medium" });
     const [formError, setFormError] = useState("");
+    const [modalOpen, setModalOpen] = useState(false);
 
     const project = projectResponse?.data;
     const tasks = tasksResponse?.data || [];
+    const totalPages = tasksResponse?.meta?.last_page || 1;
 
     async function handleSubmit(event) {
         event.preventDefault();
         setFormError("");
 
         try {
-            await createTask({ projectId, title, priority }).unwrap();
-            setTitle("");
+            await createTask({ projectId, ...form }).unwrap();
+            closeModal();
         } catch (error) {
             setFormError(error?.data?.message || "Unable to create task.");
         }
@@ -37,6 +39,17 @@ function ProjectDetails() {
 
     async function handleStatusChange(task, status) {
         await updateTask({ taskId: task.id, status });
+    }
+
+    function openCreateModal() {
+        setForm({ title: "", priority: "medium" });
+        setFormError("");
+        setModalOpen(true);
+    }
+
+    function closeModal() {
+        setModalOpen(false);
+        setFormError("");
     }
 
     async function handleDelete(taskId) {
@@ -51,58 +64,55 @@ function ProjectDetails() {
     return (
         <div className="page-stack">
             <Link className="back-link" to="/projects">Back to projects</Link>
-            <div className="page-heading">
+            <div className="page-heading project-detail-heading">
                 <div>
                     <p className="eyebrow">Project</p>
                     <h1>{project.name}</h1>
                     <p className="muted">{project.description || "No description yet."}</p>
                 </div>
-                <span className="status-pill">{project.status}</span>
+                <div className="project-heading-actions">
+                    <span className="status-pill">{project.status}</span>
+                    <button className="button-primary" onClick={openCreateModal}>Create task</button>
+                </div>
             </div>
 
-            <section className="card">
-                <h2>New task</h2>
-                {formError && <p className="form-error" role="alert">{formError}</p>}
-                <form className="inline-form" onSubmit={handleSubmit}>
-                    <label className="sr-only" htmlFor="task-title">Task title</label>
-                    <input id="task-title" value={title} onChange={(event) => setTitle(event.target.value)} placeholder="What needs to be done?" required maxLength={180} />
-                    <label className="sr-only" htmlFor="task-priority">Priority</label>
-                    <select id="task-priority" value={priority} onChange={(event) => setPriority(event.target.value)}>
-                        <option value="low">Low priority</option>
-                        <option value="medium">Medium priority</option>
-                        <option value="high">High priority</option>
-                    </select>
-                    <button type="submit" disabled={isCreating}>{isCreating ? "Adding..." : "Add task"}</button>
-                </form>
-            </section>
-
-            <section>
+            <section className="tasks-section">
                 <div className="section-heading">
                     <h2>Tasks</h2>
-                    <span className="muted">{tasks.length} total</span>
+                    <span className="muted">{tasksResponse?.meta?.total || 0} total</span>
                 </div>
                 {tasksLoading && <p className="status-message">Loading tasks...</p>}
                 {isError && <div className="status-message"><p>Tasks could not be loaded.</p><button onClick={refetch}>Try again</button></div>}
-                {!tasksLoading && !isError && tasks.length === 0 && <div className="empty-state">No tasks yet. Add the first one above.</div>}
-                <div className="task-list">
-                    {tasks.map((task) => (
-                        <article className="task-row" key={task.id}>
-                            <div>
-                                <h3>{task.title}</h3>
-                                <span className={`priority-${task.priority}`}>{task.priority} priority</span>
-                            </div>
-                            <div className="task-actions">
-                                <select value={task.status} onChange={(event) => handleStatusChange(task, event.target.value)} aria-label={`Status for ${task.title}`}>
-                                    <option value="todo">To do</option>
-                                    <option value="in_progress">In progress</option>
-                                    <option value="done">Done</option>
-                                </select>
-                                <button className="button-danger" onClick={() => handleDelete(task.id)}>Delete</button>
-                            </div>
-                        </article>
-                    ))}
-                </div>
+                {!tasksLoading && !isError && tasks.length === 0 && <div className="empty-state">No tasks yet. Create the first one above.</div>}
+                {tasks.length > 0 && <div className="table-wrap">
+                    <table className="projects-table tasks-table">
+                        <thead><tr><th>Task</th><th>Priority</th><th>Status</th><th>Created</th><th className="actions-header">Actions</th></tr></thead>
+                        <tbody>{tasks.map((task) => (
+                            <tr key={task.id}>
+                                <td data-label="Task"><strong className={task.status === "done" ? "task-complete" : ""}>{task.title}</strong></td>
+                                <td data-label="Priority"><span className={`priority-${task.priority}`}>{task.priority}</span></td>
+                                <td data-label="Status"><select className="status-select" disabled={isUpdating} value={task.status} onChange={(event) => handleStatusChange(task, event.target.value)} aria-label={`Status for ${task.title}`}>
+                                    <option value="todo">To do</option><option value="in_progress">In progress</option><option value="done">Done</option>
+                                </select></td>
+                                <td data-label="Created" className="muted">{new Date(task.created_at).toLocaleDateString()}</td>
+                                <td data-label="Actions"><div className="table-actions"><button className="button-danger button-small" onClick={() => handleDelete(task.id)}>Delete</button></div></td>
+                            </tr>
+                        ))}</tbody>
+                    </table>
+                </div>}
+                {tasks.length > 0 && <div className="pagination" aria-label="Task pages"><button disabled={page <= 1} onClick={() => setPage(page - 1)}>Previous</button><span>Page {page} of {totalPages}</span><button disabled={page >= totalPages} onClick={() => setPage(page + 1)}>Next</button></div>}
             </section>
+
+            {modalOpen && <div className="modal-backdrop" role="presentation" onMouseDown={closeModal}>
+                <section className="modal" role="dialog" aria-modal="true" aria-labelledby="task-modal-title" onMouseDown={(event) => event.stopPropagation()}>
+                    <div className="modal-header"><div><p className="eyebrow">{project.name}</p><h2 id="task-modal-title">Create task</h2></div><button className="modal-close" onClick={closeModal} aria-label="Close dialog">×</button></div>
+                    {formError && <p className="form-error" role="alert">{formError}</p>}
+                    <form onSubmit={handleSubmit}><label htmlFor="task-title">Task title</label><input id="task-title" value={form.title} onChange={(event) => setForm({ ...form, title: event.target.value })} placeholder="What needs to be done?" required maxLength={180} autoFocus />
+                        <label htmlFor="task-priority">Priority</label><select id="task-priority" className="modal-select" value={form.priority} onChange={(event) => setForm({ ...form, priority: event.target.value })}><option value="low">Low priority</option><option value="medium">Medium priority</option><option value="high">High priority</option></select>
+                        <div className="modal-actions"><button type="button" onClick={closeModal}>Cancel</button><button className="button-primary" type="submit" disabled={isCreating}>{isCreating ? "Creating..." : "Create task"}</button></div>
+                    </form>
+                </section>
+            </div>}
         </div>
     );
 }

@@ -87,7 +87,7 @@ function Register() {
                         required
                     />
 
-                    <button type="submit" disabled={submitting}>
+                    <button type="submit" disabled={submitting} style={{ marginTop: "1rem" }}>
                         {submitting ? "Creating account..." : "Sign up"}
                     </button>
                 </form>

@@ -11,14 +11,13 @@ function Dashboard() {
     const taskCount = projects.reduce((total, project) => total + (project.tasks_count || 0), 0);
 
     return (
-        <div>
+        <div className="dashboard-page">
             <div className="page-heading">
                 <div>
                     <p className="eyebrow">Overview</p>
                     <h1>Good to see you, {user?.name}</h1>
-                    <p className="muted">Here is what is happening across your workspace.</p>
+                  
                 </div>
-                <Link className="button-link" to="/projects">Manage projects</Link>
             </div>
 
             {isLoading && <p className="status-message">Loading your workspace...</p>}
@@ -28,7 +27,7 @@ function Dashboard() {
                 <div className="stat-card"><span className="muted">Tasks</span><strong>{taskCount}</strong></div>
             </div>
 
-            <section className="card">
+            <section className="card recent-projects">
                 <div className="section-heading"><h2>Recent projects</h2><Link to="/projects">View all</Link></div>
                 {projects.length === 0 && !isLoading && <p className="muted">Create a project to start organizing work.</p>}
                 {projects.slice(0, 5).map((project) => (
